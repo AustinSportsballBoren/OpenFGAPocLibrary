@@ -5,7 +5,9 @@ using OpenFga.Sdk.Client.Model;
 using OpenFga.Sdk.Model;
 using Environment = System.Environment;
 
-public interface IAccessControlService
+namespace OpenFGA;
+
+public interface IOpenFGA
 {
     public Task AddRelations(List<string> subjects, List<string> relations, List<string> objects, string authModelId = "");
     public Task RemoveRelations(List<string> subjects, List<string> relations, List<string> objects, string authModelId = "");
@@ -13,18 +15,25 @@ public interface IAccessControlService
     public Task<BatchCheckResponse> BatchCheck(List<string> subs, List<string> relations, List<string> objects, string authModelId = "");
     public Task<List<string>> ListObjects(string sub, string relation, string objectType, string authModelId = "");
     public Task<List<string>> ListRelations(string sub, List<string> relations, string obj, string authModelId = "");
+    public OpenFGAIds ids { get; set; }
 }
 
-public class OpenFGA : IAccessControlService
+public class OpenFGAIds
+{
+    public string? AuthModelId { get; set; }
+    public string? StoreId { get; set; }
+}
+
+public class OpenFGA : IOpenFGA
 {
     private OpenFgaClient _client;
-    private string _authModelId = "";
-    private string _storeId = "";
-    public OpenFGA(string _fgaApiUrl, string _authModelId, string _storeId, string relationshipModel)
+    public OpenFGAIds ids { get; set; }
+
+    public OpenFGA(string relationshipModel, string? _fgaApiUrl = null, string? _authModelId = null, string? _storeId = null)
     {
         var configuration = new ClientConfiguration()
         {
-            ApiUrl = Environment.GetEnvironmentVariable("FGA_API_URL") ?? "http://localhost:8080", // required, e.g. https://api.fga.example
+            ApiUrl = Environment.GetEnvironmentVariable("FGA_API_URL") ?? _fgaApiUrl ?? "http://localhost:8080", // required, e.g. https://api.fga.example
             StoreId = Environment.GetEnvironmentVariable("FGA_STORE_ID") ?? _storeId,// optional, not needed for \`CreateStore\` and \`ListStores\`, required before calling for all other methods
             AuthorizationModelId = Environment.GetEnvironmentVariable("FGA_MODEL_ID") ?? _authModelId, // optional, can be overridden per request
         };
@@ -35,7 +44,6 @@ public class OpenFGA : IAccessControlService
         {
             var store = _client.CreateStore(new ClientCreateStoreRequest() { Name = "FGA Demo Store" }).Result;
             _client.StoreId = store.Id;
-            _storeId = store.Id;
         }
 
         if (string.IsNullOrEmpty(_client.AuthorizationModelId))
@@ -45,14 +53,19 @@ public class OpenFGA : IAccessControlService
             var response = _client.WriteAuthorizationModel(body!).Result;
 
             _client.AuthorizationModelId = response.AuthorizationModelId;
-            _authModelId = response.AuthorizationModelId;
         }
+
+        ids = new OpenFGAIds()
+        {
+            AuthModelId = _client.AuthorizationModelId,
+            StoreId = _client.StoreId
+        };
     }
 
     public async Task AddRelations(List<string> subjects, List<string> relations, List<string> objects, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientWriteOptions() { AuthorizationModelId = authModelId };
 
@@ -91,7 +104,7 @@ public class OpenFGA : IAccessControlService
     public async Task RemoveRelations(List<string> subjects, List<string> relations, List<string> objects, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientWriteOptions() { AuthorizationModelId = authModelId };
 
@@ -130,7 +143,7 @@ public class OpenFGA : IAccessControlService
     public async Task<bool?> Check(string sub, string relation, string obj, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientWriteOptions() { AuthorizationModelId = authModelId };
 
@@ -155,7 +168,7 @@ public class OpenFGA : IAccessControlService
     public async Task<List<string>> ListObjects(string sub, string relation, string objectType, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientCheckOptions() { AuthorizationModelId = authModelId };
 
@@ -180,7 +193,7 @@ public class OpenFGA : IAccessControlService
     public async Task<List<string>> ListRelations(string sub, List<string> relations, string obj, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientBatchCheckOptions() { AuthorizationModelId = authModelId };
 
@@ -205,7 +218,7 @@ public class OpenFGA : IAccessControlService
     public async Task<BatchCheckResponse> BatchCheck(List<string> user, List<string> relations, List<string> objects, string authModelId = "")
     {
         if (string.IsNullOrEmpty(authModelId))
-            authModelId = _authModelId;
+            authModelId = ids.AuthModelId!;
 
         var options = new ClientBatchCheckOptions() { AuthorizationModelId = authModelId };
 
